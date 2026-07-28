@@ -1,0 +1,532 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>RoughCut — AI Film Editing Assistant</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #0d0d0f;
+      --surface: #18181c;
+      --surface2: #222228;
+      --border: #2e2e38;
+      --text: #e8e8f0;
+      --muted: #888899;
+      --accent: #e8a020;
+      --accent2: #c05050;
+      --green: #3db87a;
+      --mono: "JetBrains Mono", "Fira Code", "Courier New", monospace;
+      --sans: -apple-system, "Segoe UI", system-ui, sans-serif;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--sans);
+      font-size: 14px;
+      line-height: 1.6;
+      min-height: 100vh;
+    }
+
+    /* ── Header ── */
+    header {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      padding: 18px 32px;
+      border-bottom: 1px solid var(--border);
+      background: var(--surface);
+    }
+    .logo {
+      font-family: var(--mono);
+      font-size: 22px;
+      font-weight: 700;
+      color: var(--accent);
+      letter-spacing: -1px;
+    }
+    .logo span { color: var(--muted); font-weight: 400; }
+    .tagline { font-size: 12px; color: var(--muted); margin-left: auto; }
+
+    /* ── Main layout ── */
+    main {
+      max-width: 960px;
+      margin: 0 auto;
+      padding: 32px 24px;
+    }
+
+    /* ── Input panel ── */
+    .input-panel {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 20px;
+      margin-bottom: 28px;
+    }
+    .input-panel label {
+      display: block;
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 8px;
+    }
+    textarea {
+      width: 100%;
+      min-height: 220px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text);
+      font-family: var(--mono);
+      font-size: 13px;
+      line-height: 1.7;
+      padding: 12px 14px;
+      resize: vertical;
+      outline: none;
+      transition: border-color .15s;
+    }
+    textarea:focus { border-color: var(--accent); }
+    textarea::placeholder { color: #44444e; }
+
+    .input-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-top: 12px;
+    }
+    button.primary {
+      background: var(--accent);
+      color: #000;
+      border: none;
+      border-radius: 6px;
+      padding: 10px 24px;
+      font-size: 14px;
+      font-weight: 700;
+      cursor: pointer;
+      letter-spacing: .03em;
+      transition: opacity .15s;
+    }
+    button.primary:disabled { opacity: .45; cursor: default; }
+    button.primary:not(:disabled):hover { opacity: .85; }
+
+    button.secondary {
+      background: transparent;
+      color: var(--muted);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 10px 18px;
+      font-size: 13px;
+      cursor: pointer;
+      transition: border-color .15s, color .15s;
+    }
+    button.secondary:hover { border-color: var(--accent); color: var(--accent); }
+
+    .char-count { font-size: 12px; color: var(--muted); margin-left: auto; }
+
+    /* ── Spinner ── */
+    .spinner {
+      display: none;
+      width: 18px; height: 18px;
+      border: 2px solid var(--border);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin .7s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Error ── */
+    .error-box {
+      background: #2a1010;
+      border: 1px solid var(--accent2);
+      border-radius: 6px;
+      padding: 14px 16px;
+      color: #e87070;
+      margin-bottom: 20px;
+      font-size: 13px;
+      display: none;
+    }
+
+    /* ── Cut sheet ── */
+    #output { display: none; }
+
+    .cut-header {
+      border-left: 4px solid var(--accent);
+      padding-left: 16px;
+      margin-bottom: 24px;
+    }
+    .cut-header h1 { font-size: 22px; font-weight: 700; color: var(--text); }
+    .cut-header p { color: var(--muted); margin-top: 6px; font-size: 14px; line-height: 1.7; }
+
+    .scene-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      margin-bottom: 24px;
+      overflow: hidden;
+    }
+    .scene-head {
+      display: flex;
+      align-items: baseline;
+      gap: 12px;
+      padding: 14px 18px;
+      background: var(--surface2);
+      border-bottom: 1px solid var(--border);
+    }
+    .scene-num {
+      font-family: var(--mono);
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--accent);
+      letter-spacing: .1em;
+      text-transform: uppercase;
+      white-space: nowrap;
+    }
+    .scene-title { font-size: 15px; font-weight: 600; color: var(--text); }
+    .scene-purpose {
+      padding: 10px 18px 14px;
+      font-size: 13px;
+      color: var(--muted);
+      border-bottom: 1px solid var(--border);
+    }
+
+    /* ── Shot table ── */
+    .shot-table-wrap { overflow-x: auto; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+    thead tr { background: var(--bg); }
+    th {
+      font-family: var(--mono);
+      font-size: 10px;
+      letter-spacing: .1em;
+      text-transform: uppercase;
+      color: var(--muted);
+      padding: 10px 14px;
+      text-align: left;
+      border-bottom: 1px solid var(--border);
+      white-space: nowrap;
+    }
+    td {
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--border);
+      vertical-align: top;
+      color: var(--text);
+    }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: rgba(255,255,255,.03); }
+
+    .tc {
+      font-family: var(--mono);
+      font-size: 12px;
+      color: var(--accent);
+      white-space: nowrap;
+    }
+    .dur {
+      font-family: var(--mono);
+      font-size: 12px;
+      color: var(--muted);
+      white-space: nowrap;
+    }
+    .shot-num {
+      font-family: var(--mono);
+      font-size: 11px;
+      color: var(--muted);
+      white-space: nowrap;
+    }
+    .transition-badge {
+      display: inline-block;
+      font-size: 10px;
+      font-family: var(--mono);
+      text-transform: uppercase;
+      letter-spacing: .06em;
+      padding: 2px 8px;
+      border-radius: 3px;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      color: var(--muted);
+      white-space: nowrap;
+    }
+    .transition-badge.cut   { border-color: #3db87a33; color: var(--green); }
+    .transition-badge.dissolve { border-color: #8888dd55; color: #aaaaee; }
+    .transition-badge.fade  { border-color: #44444e; color: #777788; }
+
+    /* ── Export bar ── */
+    .export-bar {
+      display: flex;
+      gap: 10px;
+      margin-top: 8px;
+      padding-top: 20px;
+      border-top: 1px solid var(--border);
+    }
+
+    /* ── Sample link ── */
+    .sample-link {
+      font-size: 12px;
+      color: var(--muted);
+      cursor: pointer;
+      text-decoration: underline;
+      text-underline-offset: 3px;
+    }
+    .sample-link:hover { color: var(--accent); }
+
+    /* ── Footer ── */
+    footer {
+      text-align: center;
+      font-size: 11px;
+      color: #444450;
+      padding: 28px 0 18px;
+      border-top: 1px solid var(--border);
+      margin-top: 32px;
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="logo">Rough<span>Cut</span></div>
+  <div class="tagline">AI Film Editing Assistant &nbsp;·&nbsp; Agentic Cinema 2025</div>
+</header>
+
+<main>
+  <div class="input-panel">
+    <label for="transcript">Paste transcript or footage log</label>
+    <textarea id="transcript" placeholder="Paste your raw transcript, shot log, or scene notes here.
+Examples:
+  00:00 — Wide shot of empty diner. Rain outside.
+  00:12 — SARAH enters, soaking wet. Looks around nervously.
+  00:45 — Tight close-up: her hands trembling as she dials a number.
+  01:10 — Cut to: payphone exterior. No answer.
+  ...
+Or paste a rough interview transcript, documentary footage log, or narrative notes."></textarea>
+    <div class="input-row">
+      <button class="primary" id="cutBtn">Generate Cut Sheet</button>
+      <div class="spinner" id="spinner"></div>
+      <span class="sample-link" id="loadSample">Load sample footage log</span>
+      <span class="char-count" id="charCount">0 chars</span>
+    </div>
+  </div>
+
+  <div class="error-box" id="errorBox"></div>
+
+  <div id="output">
+    <div class="cut-header">
+      <h1 id="cutTitle"></h1>
+      <p id="cutSummary"></p>
+    </div>
+    <div id="scenes"></div>
+    <div class="export-bar">
+      <button class="secondary" id="exportJson">⬇ Export JSON</button>
+      <button class="secondary" id="exportMd">⬇ Export Markdown</button>
+      <button class="secondary" id="clearBtn">✕ Clear</button>
+    </div>
+  </div>
+</main>
+
+<footer>Made with IBM Bob &nbsp;·&nbsp; RoughCut &nbsp;·&nbsp; Agentic Cinema 2025</footer>
+
+<script>
+  const SAMPLE = `FOOTAGE LOG — "The Last Signal" (short documentary)
+
+00:00:04:00 — Aerial drone: vast arctic tundra, orange sunrise light
+00:00:18:10 — INT radio station — wide: rows of dusty equipment, one light blinking
+00:00:32:00 — CLOSE on hands (ELENA, 60s) adjusting frequency dial
+00:00:45:20 — MID: Elena puts on headphones, eyes close, listening
+00:01:02:00 — Archival 16mm: 1978 — young woman (Young Elena) at same console
+00:01:24:00 — CUT BACK to present — Elena opens eyes. Slight smile.
+00:01:38:14 — Exterior: supply truck arriving through snow. DMITRI (30s) exits.
+00:01:55:00 — INT: Dmitri enters station, stamps snow off boots, looks around
+00:02:10:22 — TWO-SHOT: Dmitri and Elena. Awkward silence.
+00:02:28:00 — Dmitri: "The grant was denied. They're shutting this down."
+00:02:35:10 — CU: Elena's face — no reaction for a long beat
+00:02:44:00 — Elena: "I received a signal last night."
+00:02:49:15 — Dmitri looks skeptical. Sits down.
+00:03:05:00 — Elena plays recording — static, then a faint repeating tone
+00:03:22:00 — CU: Dmitri's expression changes. He leans in.
+00:03:40:10 — Wide: both listening together in the small glowing room
+00:03:58:00 — Exterior night: station window glowing against total darkness
+00:04:12:00 — Archival: 1978 — young Elena writing in logbook
+00:04:28:00 — Present: Elena writing same logbook, same handwriting
+00:04:45:00 — Drone pullback: station tiny against infinite tundra`;
+
+  const ta = document.getElementById('transcript');
+  const cutBtn = document.getElementById('cutBtn');
+  const spinner = document.getElementById('spinner');
+  const errorBox = document.getElementById('errorBox');
+  const output = document.getElementById('output');
+  const charCount = document.getElementById('charCount');
+
+  let lastCut = null;
+
+  ta.addEventListener('input', () => {
+    charCount.textContent = ta.value.length + ' chars';
+  });
+
+  document.getElementById('loadSample').addEventListener('click', () => {
+    ta.value = SAMPLE;
+    charCount.textContent = SAMPLE.length + ' chars';
+  });
+
+  cutBtn.addEventListener('click', async () => {
+    const transcript = ta.value.trim();
+    if (!transcript) return;
+
+    setLoading(true);
+    hideError();
+    output.style.display = 'none';
+    lastCut = null;
+
+    try {
+      const res = await fetch('/api/cut', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ transcript }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Server error');
+      lastCut = data;
+      renderCut(data);
+    } catch (err) {
+      showError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  });
+
+  function setLoading(on) {
+    cutBtn.disabled = on;
+    spinner.style.display = on ? 'block' : 'none';
+  }
+
+  function showError(msg) {
+    errorBox.textContent = '⚠ ' + msg;
+    errorBox.style.display = 'block';
+  }
+
+  function hideError() {
+    errorBox.style.display = 'none';
+  }
+
+  function renderCut(cut) {
+    document.getElementById('cutTitle').textContent = cut.title || 'Untitled Cut';
+    document.getElementById('cutSummary').textContent = cut.summary || '';
+
+    const scenesEl = document.getElementById('scenes');
+    scenesEl.innerHTML = '';
+
+    (cut.scenes || []).forEach((scene, si) => {
+      const card = document.createElement('div');
+      card.className = 'scene-card';
+
+      const head = document.createElement('div');
+      head.className = 'scene-head';
+      head.innerHTML = `
+        <span class="scene-num">Scene ${scene.scene_number ?? si + 1}</span>
+        <span class="scene-title">${esc(scene.title || '')}</span>
+      `;
+      card.appendChild(head);
+
+      if (scene.narrative_purpose) {
+        const purpose = document.createElement('div');
+        purpose.className = 'scene-purpose';
+        purpose.textContent = scene.narrative_purpose;
+        card.appendChild(purpose);
+      }
+
+      const wrap = document.createElement('div');
+      wrap.className = 'shot-table-wrap';
+
+      const table = document.createElement('table');
+      table.innerHTML = `<thead><tr>
+        <th>#</th>
+        <th>TC In</th>
+        <th>TC Out</th>
+        <th>Duration</th>
+        <th>Description</th>
+        <th>Transition</th>
+      </tr></thead>`;
+
+      const tbody = document.createElement('tbody');
+      (scene.clips || []).forEach((clip, ci) => {
+        const tr = document.createElement('tr');
+        const t = (clip.transition || 'Cut').toLowerCase();
+        const badgeClass = t.includes('cut') ? 'cut' : t.includes('dissolve') ? 'dissolve' : t.includes('fade') ? 'fade' : '';
+        tr.innerHTML = `
+          <td class="shot-num">${clip.shot_number ?? ci + 1}</td>
+          <td class="tc">${esc(clip.timecode_in || '—')}</td>
+          <td class="tc">${esc(clip.timecode_out || '—')}</td>
+          <td class="dur">${esc(clip.duration || '—')}</td>
+          <td>${esc(clip.description || '')}</td>
+          <td><span class="transition-badge ${badgeClass}">${esc(clip.transition || 'Cut')}</span></td>
+        `;
+        tbody.appendChild(tr);
+      });
+      table.appendChild(tbody);
+      wrap.appendChild(table);
+      card.appendChild(wrap);
+      scenesEl.appendChild(card);
+    });
+
+    output.style.display = 'block';
+    output.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  function esc(str) {
+    return String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
+  document.getElementById('clearBtn').addEventListener('click', () => {
+    output.style.display = 'none';
+    ta.value = '';
+    charCount.textContent = '0 chars';
+    lastCut = null;
+  });
+
+  document.getElementById('exportJson').addEventListener('click', () => {
+    if (!lastCut) return;
+    download('roughcut.json', JSON.stringify(lastCut, null, 2), 'application/json');
+  });
+
+  document.getElementById('exportMd').addEventListener('click', () => {
+    if (!lastCut) return;
+    download('roughcut.md', toMarkdown(lastCut), 'text/markdown');
+  });
+
+  function toMarkdown(cut) {
+    const lines = [];
+    lines.push(`# ${cut.title}`);
+    lines.push('');
+    lines.push(`> ${cut.summary}`);
+    lines.push('');
+    (cut.scenes || []).forEach((scene) => {
+      lines.push(`## Scene ${scene.scene_number}: ${scene.title}`);
+      lines.push('');
+      lines.push(`*${scene.narrative_purpose}*`);
+      lines.push('');
+      lines.push('| # | TC In | TC Out | Duration | Description | Transition |');
+      lines.push('|---|-------|--------|----------|-------------|------------|');
+      (scene.clips || []).forEach((clip, ci) => {
+        lines.push(`| ${clip.shot_number ?? ci + 1} | ${clip.timecode_in || '—'} | ${clip.timecode_out || '—'} | ${clip.duration || '—'} | ${clip.description || ''} | ${clip.transition || 'Cut'} |`);
+      });
+      lines.push('');
+    });
+    return lines.join('\n');
+  }
+
+  function download(filename, content, type) {
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([content], { type }));
+    a.download = filename;
+    a.click();
+  }
+</script>
+</body>
+</html>
