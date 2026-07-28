@@ -2,7 +2,7 @@ import "dotenv/config";
 import express from "express";
 import path from "path";
 import { fileURLToPath } from "url";
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import { GoogleGenAI } from "@google/genai";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -11,8 +11,7 @@ const PORT = process.env.PORT || 3000;
 app.use(express.json({ limit: "1mb" }));
 app.use(express.static(path.join(__dirname, "public")));
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+const genAI = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
 const SYSTEM_PROMPT = `You are RoughCut, a professional film editing assistant.
 
@@ -62,12 +61,17 @@ app.post("/api/cut", async (req, res) => {
   }
 
   try {
-    const result = await model.generateContent([
-      { text: SYSTEM_PROMPT },
-      { text: `TRANSCRIPT:\n\n${transcript.trim()}` },
-    ]);
+    const result = await genAI.models.generateContent({
+      model: "gemini-2.0-flash",
+      contents: [
+        { role: "user", parts: [
+          { text: SYSTEM_PROMPT },
+          { text: `TRANSCRIPT:\n\n${transcript.trim()}` },
+        ]},
+      ],
+    });
 
-    const raw = result.response.text().trim();
+    const raw = result.text.trim();
 
     // Strip markdown code fences if the model adds them despite instructions
     const jsonStr = raw.replace(/^```(?:json)?\n?/i, "").replace(/\n?```$/, "").trim();
